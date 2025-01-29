@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "SoftwareValidator": {
+      "commandName": "Project",
+      "commandLineArgs": "\"C:\\Users\\Jackson\\Source\\Repos\\SoftwareValidator\\TEST\\master\" \"C:\\Users\\Jackson\\Source\\Repos\\SoftwareValidator\\TEST\\current\""
+    }
+  }
+}
