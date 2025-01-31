@@ -1,7 +1,5 @@
 ﻿using System.Collections.Concurrent;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.Design.Serialization;
-using System.Numerics;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -22,7 +20,7 @@ namespace CodyLib
 		}
 
 		[JsonInclude()]
-		public string Root {get; private set;}
+		public string Root { get; private set; }
 
 		public delegate Task<T> FileOperation<T>(FileStream fs);
 
@@ -41,7 +39,7 @@ namespace CodyLib
 		[JsonIgnore()]
 		private FileOperation<T> FileTask;
 
-		public FileIndex(string _Root, FileOperation<T> _FileTask )
+		public FileIndex(string _Root, FileOperation<T> _FileTask)
 		{
 			Root = _Root;
 			FileTask = _FileTask;
@@ -57,9 +55,24 @@ namespace CodyLib
 			return Index.ContainsKey(key);
 		}
 
+		public bool TryGetValue(string key, [MaybeNullWhen(false)] out T value) 
+		{
+			IndexedData<T>? data;
+			bool ok = Index.TryGetValue(key, out data);
+			value = default(T);
+
+			if (ok)
+			{
+				ArgumentNullException.ThrowIfNull(data);
+				value = data.Data;
+			}
+
+			return ok;
+		}
+
 		private IndexedData<T> this[string key]
 		{
-			get 
+			get
 			{
 				return Index[key];
 			}
@@ -123,15 +136,11 @@ namespace CodyLib
 		public async Task<int> CreateIndex()
 		{
 			int totalFiles = 0;
-			List<Task> fileTasks = new();
+			List<Task> fileTasks = [];
 
 			foreach (string directoryPath in EnumerateDirectories())
-			{
 				foreach (string filePath in Directory.EnumerateFiles(directoryPath))
-				{
 					fileTasks.Add(VisitFile(filePath));
-				}
-			}
 
 			while (fileTasks.Count > 0)
 			{
@@ -140,7 +149,6 @@ namespace CodyLib
 
 				await completedTask;
 				totalFiles++;
-				Console.WriteLine(totalFiles);
 			}
 
 			return totalFiles;
@@ -157,12 +165,8 @@ namespace CodyLib
 			List<Task<bool>> fileTasks = [];
 
 			foreach (string directoryPath in EnumerateDirectories())
-			{
 				foreach (string filePath in Directory.EnumerateFiles(directoryPath))
-				{
 					fileTasks.Add(UpdateFile(filePath, visitedPaths));
-				}
-			}
 
 			while (fileTasks.Count > 0)
 			{
@@ -171,7 +175,7 @@ namespace CodyLib
 
 				await completedTask;
 
-				if(completedTask.Result)
+				if (completedTask.Result)
 					updates++;
 			}
 
@@ -214,7 +218,7 @@ namespace CodyLib
 			}
 		}
 
-		public static int CorrectErrors<T>(FileIndex<T> master, FileIndex<T> current, bool force = false) where T : IEquatable<T>
+		public static int CorrectErrors(FileIndex<T> master, FileIndex<T> current, bool force = false)
 		{
 			int errorCount = 0;
 
@@ -224,11 +228,22 @@ namespace CodyLib
 				{
 					string from = Path.Combine(master.Root, relativePath);
 					string to = Path.Combine(current.Root, relativePath);
-					Console.WriteLine($"{relativePath} NG");
-					Console.WriteLine($"\t{from}->{to}");
+
+					T masterHash = master[relativePath].Data;
+
+					string strActualHash = "File missing";
+
+					if (current.TryGetValue(relativePath, out T? value))
+						strActualHash = value.ToString() ?? "";
+
+					Console.WriteLine($"[{DateTime.Now.ToString()}] NG ({relativePath})");
+					Console.WriteLine($"\tMaster: ({masterHash}) Actual: ({strActualHash})");
 
 					if (force)
+					{
 						File.Copy(from, to);
+						Console.WriteLine($"\t{from}->{to}");
+					}
 
 					errorCount++;
 				}

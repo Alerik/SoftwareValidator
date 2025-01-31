@@ -1,17 +1,15 @@
-﻿using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.ComponentModel.Design;
-using System.Resources;
-using System.Runtime.CompilerServices;
-using System.Security;
+﻿using CodyLib;
+using System.Dynamic;
 using System.Security.Cryptography;
 using System.Text.Json;
-using CodyLib;
 
 namespace SoftwareValidator
 {
 	public class Program
 	{
+		private static readonly string MASTER_INDEX_NAME = "_index.json";
+		private static readonly string CURRENT_INDEX_NAME = "index.json";
+
 		const int BENCHMARK_COUNT = 10;
 		static long totalBytes = 0;
 
@@ -31,7 +29,7 @@ namespace SoftwareValidator
 		// I think I'm at the limits of performance out of C#
 		// I'm achieving nearly 1Gb/s on my SSD with Release code
 		// Half of the spec according to Amazon
-		public static async Task<string> ComputeFileHash3(FileStream fileStream)
+		private static async Task<string> ComputeFileHash3(FileStream fileStream)
 		{
 			using SHA256 sha = SHA256.Create();
 			byte[] checksum = await sha.ComputeHashAsync(fileStream);
@@ -40,18 +38,32 @@ namespace SoftwareValidator
 			return hash;
 		}
 
+		private static string GetIndexPath(string targetPath, string name)
+		{
+			string? parentDirectory = Path.GetDirectoryName(targetPath);
+			ArgumentNullException.ThrowIfNullOrEmpty(parentDirectory);
+
+			return Path.Combine(parentDirectory, name);
+		}
+
+		private static void Log(string message)
+		{
+			Console.WriteLine($"[{DateTime.Now.ToString()}] {message}");
+		}
+
 		public static async Task<FileIndex<string>?> LoadMasterIndex(string masterDir, bool useCache = true)
 		{
 			FileIndex<string> masterIndex = null;
+			string indexPath = GetIndexPath(masterDir, MASTER_INDEX_NAME);
 
 			try
 			{
 				if (useCache)
-					masterIndex = FileIndex<string>.LoadIndex(MASTER_INDEX_PATH, ComputeFileHash3);
+					masterIndex = FileIndex<string>.LoadIndex(indexPath, ComputeFileHash3);
 				else
 					throw new FileNotFoundException();
 
-				Console.WriteLine("Found cached Master index");
+				Log($"Loaded MASTER cache @ {indexPath}");
 			}
 			catch (Exception e) when (e is FileNotFoundException || e is JsonException)
 			{
@@ -60,15 +72,15 @@ namespace SoftwareValidator
 
 				if (useCache)
 				{
-					masterIndex.SaveIndex(MASTER_INDEX_PATH);
-					Console.WriteLine("Cached Master index");
+					masterIndex.SaveIndex(indexPath);
+					Log($"Cached MASTER @ {indexPath}");
 				}
 			}
 			catch (Exception e)
 			{
 				Console.ForegroundColor = ConsoleColor.Red;
-				Console.WriteLine("Encountered unexpected exception");
-				Console.WriteLine(e);
+				Log("Encountered unexpected exception");
+				Log(e.ToString());
 				Console.ReadKey();
 			}
 
@@ -78,101 +90,100 @@ namespace SoftwareValidator
 		public static async Task<FileIndex<string>?> LoadCurrentIndex(string currentDir, bool useCache = true)
 		{
 			FileIndex<string> currentIndex = null;
+			string indexPath = GetIndexPath(currentDir, CURRENT_INDEX_NAME);
+			bool loaded = false;
 
 			try
 			{
 				if (useCache)
-					currentIndex = FileIndex<string>.LoadIndex(CURRENT_INDEX_PATH, ComputeFileHash3);
+					currentIndex = FileIndex<string>.LoadIndex(indexPath, ComputeFileHash3);
 				else
 					throw new FileNotFoundException();
 
-				Console.WriteLine("Found cached Current index");
+				Log($"Loaded CURRENT cache @ {indexPath}");
 			}
 			catch (Exception e) when (e is FileNotFoundException || e is JsonException)
 			{
 				currentIndex = new FileIndex<string>(currentDir, ComputeFileHash3);
+				loaded = true;
 				await currentIndex.CreateIndex();
 			}
 			catch (Exception e)
 			{
 				Console.ForegroundColor = ConsoleColor.Red;
-				Console.WriteLine("Encountered unexpected exception");
-				Console.WriteLine(e);
+				Log("Encountered unexpected exception");
+				Log(e.ToString());
 				Console.ReadKey();
 			}
 
 			if (currentIndex != null)
 			{
-				int updates = await currentIndex.UpdateIndex();
+				Log($"Checking CURRENT cache for changes");
+				int updates = loaded ? 0 : await currentIndex.UpdateIndex();
 
 				if (useCache)
 				{
 					if (updates > 0)
 					{
-						currentIndex.SaveIndex(CURRENT_INDEX_PATH);
-						Console.WriteLine("Updated Current index");
+						currentIndex.SaveIndex(indexPath);
+						Log($"Updated CURRENT cache @ {indexPath}");
 					}
-					else if (!File.Exists(CURRENT_INDEX_PATH))
+					else if (!File.Exists(indexPath))
 					{
-						currentIndex.SaveIndex(CURRENT_INDEX_PATH);
-						Console.WriteLine("Cached Current index");
+						currentIndex.SaveIndex(indexPath);
+						Log($"Cached CURRENT @ {indexPath}");
 					}
 				}
 			}
 
 			return currentIndex;
 		}
- 
-		public static string FormatBytes(double bytes) 
+
+		public static string FormatBytes(double bytes)
 		{
 			double tb, gb, mb, kb;
 
 			if ((tb = bytes / 1099511627776.00) >= 1)
-				return $"{tb:F2}TB";	
+				return $"{tb:F2}TB";
 			else if ((gb = bytes / 1073741824.00) >= 1)
-				return $"{gb:F2}GB";	
+				return $"{gb:F2}GB";
 			else if ((mb = bytes / 1048576.0) >= 1)
-				return $"{mb:F2}MB";	
+				return $"{mb:F2}MB";
 			else if ((kb = bytes / 1024.0) >= 1)
-				return $"{kb:F2}KB";	
-				else
-			return $"{bytes}B";	
+				return $"{kb:F2}KB";
+			else
+				return $"{bytes}B";
 		}
 
 		static async Task<int> Benchmark_Driver(string masterDir, string currentDir)
 		{
-			Console.WriteLine($"Running {BENCHMARK_COUNT} benchmark passes");
+			Log($"Running {BENCHMARK_COUNT} benchmark passes");
 			DateTime start = DateTime.Now;
 
 			for (int i = 0; i < BENCHMARK_COUNT; i++)
 			{
-				Console.WriteLine($"\t{i+1}/{BENCHMARK_COUNT}");
+				Console.WriteLine($"\t{i + 1}/{BENCHMARK_COUNT}");
 				Task<FileIndex<string>?> tskMasterIndex = LoadMasterIndex(masterDir, false);
 				Task<FileIndex<string>?> tskCurrentIndex = LoadCurrentIndex(currentDir, false);
 
 				await Task.WhenAll(tskMasterIndex, tskCurrentIndex);
 
 				if (tskCurrentIndex.Result is null)
-				{
 					return 1;
-				}
 
 				if (tskMasterIndex.Result is null)
-				{
-
 					return 1;
-				}
 			}
 
 			DateTime end = DateTime.Now;
 
 			double totalTime = (end - start).TotalSeconds;
-			Console.WriteLine($"Validated {FormatBytes(totalBytes)} in {totalTime:F2}s");
+			Log($"Validated {FormatBytes(totalBytes)} in {totalTime:F2}s");
 
 			double averageTime = totalTime / BENCHMARK_COUNT; ;
 			string rate = FormatBytes(totalBytes / totalTime);
 
-			Console.WriteLine($"Average cycle time {averageTime:F2}s @ {rate}/s");
+			Log($"Average cycle time {averageTime:F2}s @ {rate}/s");
 
 			Console.WriteLine();
 			Console.WriteLine("Press the any key to continue...");
@@ -184,7 +195,6 @@ namespace SoftwareValidator
 		static async Task Main_Driver(string masterDir, string currentDir, bool force = false)
 		{
 			Console.ForegroundColor = ConsoleColor.White;
-			Console.WriteLine($"Comparing {currentDir} to {masterDir}");
 			DateTime start = DateTime.Now;
 
 			Task<FileIndex<string>?> tskMasterIndex = LoadMasterIndex(masterDir);
@@ -207,16 +217,21 @@ namespace SoftwareValidator
 			if (errors == 0)
 			{
 				Console.ForegroundColor = ConsoleColor.Green;
-				if(totalBytes > 0)
-					Console.WriteLine($"Validated {FormatBytes(totalBytes)} in {totalTime:F2}s");
+				if (totalBytes > 0)
+					Log($"Validated {FormatBytes(totalBytes)} in {totalTime:F2}s");
 				else
-					Console.WriteLine($"Validated Current in {totalTime:F2}s");
+					Log($"Validated Current in {totalTime:F2}s");
 				Console.ForegroundColor = ConsoleColor.White;
 			}
 			else
 			{
 				Console.ForegroundColor = ConsoleColor.Red;
-				Console.WriteLine($"Found and fixed {errors} errors in {totalTime:F2}s");
+
+				if(force)
+					Log($"Found and fixed {errors} errors in {totalTime:F2}s");
+				else
+					Log($"Found {errors} errors in {totalTime:F2}s");
+
 				Console.ForegroundColor = ConsoleColor.White;
 			}
 
@@ -225,10 +240,27 @@ namespace SoftwareValidator
 			Console.ReadKey();
 		}
 
+		static bool DeleteIndex(string targetPath, string indexName)
+		{
+			string indexPath = GetIndexPath(targetPath, indexName);
+
+			try
+			{
+				File.Delete(indexPath);
+				return true;
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine($"Encountered an error deleting index @ {indexPath}");
+				Console.WriteLine(ex);
+			}
+			return false;
+		}
+
 		static void WriteHelp()
 		{
-		string help = 
-"""
+			string help =
+	"""
 Usage: SoftwareValidator.exe masterDirectory currentDirectory [OPTIONS]
 
 Arguments:
@@ -236,6 +268,7 @@ Arguments:
   currentDirectory           The path to the current directory to be validated against the master directory.
 
 Options:
+  -r, --reset                Reset the CURRENT and MASTER cached index files. Normal operation continues after cache removal
   -b, --benchmark            Run in benchmark mode. Enables repeated performance benchmarking for average process cycle time. Files ARE NOT changed
   -f, --force                Run in force fire mode. Overwrites corrupted files with master files. Files ARE changes
 
@@ -258,60 +291,61 @@ Exit Codes:
 
 		static void WriteIncorrectArgCount()
 		{
-//			string help =
-//"""
-//Error: Incorrect number of arguments supplied.
+			string help =
+"""
+Error: Incorrect number of arguments supplied.
 
-//Usage: SoftwareValidator.exe masterDirectory currentDirectory [OPTIONS]
+Usage: SoftwareValidator.exe masterDirectory currentDirectory [OPTIONS]
 
-//  masterDirectory            The path to the master directory containing the reference files or base data.
-//  currentDirectory           The path to the current directory to be validated against the master directory.
+  masterDirectory            The path to the master directory containing the reference files or base data.
+  currentDirectory           The path to the current directory to be validated against the master directory.
 
-//For more information, use the --help flag.
-//""";
+For more information, use the --help flag.
+""";
 
-//			Console.WriteLine(help);
+			Console.WriteLine(help);
 		}
 
 		static void WriteInvalidDirectory(string directoryName, string directoryPath)
 		{
-//			string help = 
-//$"""
-//Error: Invalid {directoryName} directory specified [{directoryPath}].
+			string help =
+$"""
+Error: Invalid {directoryName} directory specified [{directoryPath}].
 
-//The directory 'path/to/directory' does not exist or is not accessible.
+The directory 'path/to/directory' does not exist or is not accessible.
 
-//Please verify that the directory path is correct and try again.
-//""";
+Please verify that the directory path is correct and try again.
+""";
 
-//			Console.WriteLine(help);
+			Console.WriteLine(help);
 		}
 
 		static void WriteInvalidFlag(string flag)
 		{
 
-//			string help =
-//$"""
-//Error: Invalid flag '{flag}' provided.
+			string help =
+$"""
+Error: Invalid flag '{flag}' provided.
 
-//The flag '-invalidFlag' is not recognized.
+The flag '-invalidFlag' is not recognized.
 
-//Usage: SoftwareValidator.exe masterDirectory currentDirectory [OPTIONS]
+Usage: SoftwareValidator.exe masterDirectory currentDirectory [OPTIONS]
 
-//Valid flags:
-//  -b, --benchmark            Run in benchmark mode.
-//  -f, --force                Force file overwrites.
+Valid flags:
+  -r, --reset                Reset the CURRENT and MASTER cached index files.
+  -b, --benchmark            Run in benchmark mode.
+  -f, --force                Force file overwrites.
 
-//For more information, use the --help flag.
+For more information, use the --help flag.
 
-//""";
+""";
 
-//			Console.WriteLine(help);
+			Console.WriteLine(help);
 		}
 
-		private static readonly string CURRENT_INDEX_PATH = @"C:\Users\Jackson\Source\Repos\SoftwareValidator\TEST\index.json";
-		private static readonly string MASTER_INDEX_PATH = @"C:\Users\Jackson\Source\Repos\SoftwareValidator\TEST\_index.json";
-
+		// Todo:
+		// Add file filters (extension most likely)
+		// Add logging (Actually, this is stupid. This should be piped out on a script level with >> and just add a timestamping method)
 		static async Task<int> Main(string[] args)
 		{
 			if (args.Length == 1)
@@ -323,7 +357,7 @@ Exit Codes:
 				}
 				return 1;
 			}
-			if (args.Length < 2 || args.Length > 3)
+			if (args.Length < 2 || args.Length > 4)
 			{
 				WriteIncorrectArgCount();
 				return 1;
@@ -349,11 +383,18 @@ Exit Codes:
 
 			bool force = false;
 			bool benchmark = false;
+			bool reset = false;
 
-			if (args.Length == 3)
+			for (int i = 2; i < Math.Min(4, args.Length); i++)
 			{
-				switch (args[2])
+				switch (args[i])
 				{
+					case "-r":
+					case "--rest":
+					case "/r":
+					case "/reset":
+						reset = true;
+						break;
 					case "-b":
 					case "--benchmark":
 					case "/b":
@@ -371,7 +412,12 @@ Exit Codes:
 						WriteInvalidFlag(args[2]);
 						return 2;
 				}
+
 			}
+
+			if (reset)
+				if (!(DeleteIndex(masterDir, MASTER_INDEX_NAME) && DeleteIndex(currentDir, CURRENT_INDEX_NAME)))
+					return 3;
 
 			if (benchmark)
 			{

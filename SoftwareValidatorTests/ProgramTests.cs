@@ -1,11 +1,4 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
-using SoftwareValidator;
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Collections.Concurrent;
 
 namespace SoftwareValidator.Tests
 {
@@ -41,7 +34,7 @@ namespace SoftwareValidator.Tests
 		{
 			List<string> directories = [];
 
-			string root = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName().Replace(".",""));
+			string root = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName().Replace(".", ""));
 			string currentDirectory = root;
 			Directory.CreateDirectory(currentDirectory);
 			directories.Add(currentDirectory);
@@ -74,7 +67,7 @@ namespace SoftwareValidator.Tests
 		public async Task CreateDirectoryIndexTest()
 		{
 			List<string> files = [];
-			string root = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName().Replace(".",""));
+			string root = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName().Replace(".", ""));
 			Directory.CreateDirectory(root);
 
 			for (int i = 0; i < 10; i++)
@@ -101,7 +94,7 @@ namespace SoftwareValidator.Tests
 		{
 			List<string> ogFiles = [];
 			List<string> newFiles = [];
-			string root = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName().Replace(".",""));
+			string root = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName().Replace(".", ""));
 			Directory.CreateDirectory(root);
 
 			for (int i = 0; i < 10; i++)
