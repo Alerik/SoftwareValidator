@@ -1,4 +1,4 @@
-﻿using CodyLib;
+﻿using CodiLib;
 using System.Dynamic;
 using System.Security.Cryptography;
 using System.Text.Json;

@@ -7,7 +7,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SoftwareValidator", "Softwa
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SoftwareValidatorTests", "SoftwareValidatorTests\SoftwareValidatorTests.csproj", "{E46AC20C-B02E-4BBF-B9C4-12478DB69E23}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CodyLib", "CodyLib\CodyLib.csproj", "{596A5C8F-7282-4EA6-82FC-54EA4F1DCC7A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CodiLib", "CodiLib\CodiLib.csproj", "{596A5C8F-7282-4EA6-82FC-54EA4F1DCC7A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

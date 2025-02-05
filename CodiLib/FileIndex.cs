@@ -3,7 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace CodyLib
+namespace CodiLib
 {
 	public class FileIndex<T> where T : IEquatable<T>
 	{

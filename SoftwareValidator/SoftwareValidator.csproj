@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\CodyLib\CodyLib.csproj" />
+    <ProjectReference Include="..\CodiLib\CodiLib.csproj" />
   </ItemGroup>
 
 </Project>
